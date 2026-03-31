@@ -844,7 +844,7 @@ return QRCode;
           • <b>"1 kg de pollo, medio kilo de queso"</b><br>
           • <b>"20 pesos de cilantro, 15 de nopales"</b><br>
           • <b>"clienta María García"</b> — para poner nombre<br>
-          • <b>"total"</b> o <b>"resultado"</b> — para cerrar la nota
+          • <b>"total"</b> o <b>"cobrar"</b> — cierra la nota automáticamente 🎯
         </div>
       </div>
 
@@ -865,7 +865,7 @@ return QRCode;
       <div style="display:flex;gap:8px">
         <button id="btnIniciarVoz" onclick="iniciarVoz()"
           style="flex:1;padding:14px;background:linear-gradient(135deg,#be185d,#9d174d);color:white;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;gap:8px">
-          🎤 Hablar
+          🎤 Iniciar escucha
         </button>
         <button id="btnAgregarVoz" onclick="agregarVozAlCarrito()" style="display:none;flex:1;padding:14px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;border-radius:10px;font-weight:800;font-size:15px;cursor:pointer">
           ✅ Agregar a nota
@@ -2718,74 +2718,139 @@ window.addEventListener('resize', adjustLayout);
 adjustLayout();
 
 
-// ─── VOZ IA ────────────────────────────────────────────────────────────────────
+// ─── VOZ IA CONTINUA ──────────────────────────────────────────────────────────
 let _vozRec = null;
 let _vozItems = [];
-let _vozCerrar = false;
+let _vozActiva = false;
+let _vozProcesando = false;
+let _transcripcionAcum = '';
 
 function abrirVoz() {
   _vozItems = [];
-  _vozCerrar = false;
+  _vozActiva = false;
+  _vozProcesando = false;
+  _transcripcionAcum = '';
   document.getElementById('modalVoz').classList.add('open');
   document.getElementById('vozResultado').style.display = 'none';
   document.getElementById('btnAgregarVoz').style.display = 'none';
   document.getElementById('btnIniciarVoz').style.display = 'flex';
+  document.getElementById('btnIniciarVoz').innerHTML = '🎤 Iniciar escucha';
+  document.getElementById('btnIniciarVoz').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
   document.getElementById('vozIcono').textContent = '🎤';
-  document.getElementById('vozMensaje').textContent = 'Presiona el botón para hablar';
+  document.getElementById('vozMensaje').textContent = 'Presiona para activar el micrófono';
   document.getElementById('vozTranscripcion').textContent = '';
 }
 
 function cerrarVoz() {
+  _vozActiva = false;
   if (_vozRec) { try { _vozRec.stop(); } catch {} _vozRec = null; }
   document.getElementById('modalVoz').classList.remove('open');
 }
 
 function nuevaDictacion() {
   _vozItems = [];
-  _vozCerrar = false;
+  _transcripcionAcum = '';
   document.getElementById('vozResultado').style.display = 'none';
   document.getElementById('btnAgregarVoz').style.display = 'none';
-  document.getElementById('btnIniciarVoz').style.display = 'flex';
-  document.getElementById('vozIcono').textContent = '🎤';
-  document.getElementById('vozMensaje').textContent = 'Presiona el botón para hablar';
+  document.getElementById('vozIcono').textContent = '🔴';
+  document.getElementById('vozMensaje').textContent = 'Escuchando... di los productos';
   document.getElementById('vozTranscripcion').textContent = '';
 }
 
 function iniciarVoz() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Tu navegador no soporta reconocimiento de voz. Usa Chrome.', 'error'); return; }
+  if (!SR) { toast('Usa Chrome para voz continua', 'error'); return; }
 
-  document.getElementById('btnIniciarVoz').innerHTML = '⏹️ Grabando...';
+  if (_vozActiva) {
+    // Detener manualmente
+    _vozActiva = false;
+    if (_vozRec) { try { _vozRec.stop(); } catch {} }
+    document.getElementById('btnIniciarVoz').innerHTML = '🎤 Iniciar escucha';
+    document.getElementById('btnIniciarVoz').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
+    document.getElementById('vozIcono').textContent = '🎤';
+    document.getElementById('vozMensaje').textContent = 'Micrófono apagado';
+    return;
+  }
+
+  _vozActiva = true;
+  _transcripcionAcum = '';
+  document.getElementById('btnIniciarVoz').innerHTML = '⏹️ Detener micrófono';
   document.getElementById('btnIniciarVoz').style.background = '#dc2626';
   document.getElementById('vozIcono').textContent = '🔴';
-  document.getElementById('vozMensaje').textContent = 'Escuchando... habla ahora';
-  document.getElementById('vozTranscripcion').textContent = '';
+  document.getElementById('vozMensaje').textContent = 'Escuchando... di los productos';
+  document.getElementById('vozResultado').style.display = 'none';
+  document.getElementById('btnAgregarVoz').style.display = 'none';
 
+  _iniciarReconocimiento();
+}
+
+function _iniciarReconocimiento() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   _vozRec = new SR();
   _vozRec.lang = 'es-MX';
-  _vozRec.continuous = false;
+  _vozRec.continuous = true;
   _vozRec.interimResults = true;
   _vozRec.maxAlternatives = 1;
 
+  let _bufferFinal = '';
+
   _vozRec.onresult = (e) => {
-    const transcript = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('vozTranscripcion').textContent = '"' + transcript + '"';
-    if (e.results[0].isFinal) interpretarVoz(transcript);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        _bufferFinal += e.results[i][0].transcript + ' ';
+      } else {
+        interim = e.results[i][0].transcript;
+      }
+    }
+    const total = (_transcripcionAcum + _bufferFinal + interim).trim();
+    document.getElementById('vozTranscripcion').textContent = '"' + total + '"';
+
+    // Detectar palabra de cierre en tiempo real
+    const palabrasCierre = ['total','resultado','cierra nota','cerrar nota','cobrar','cobrame','terminar','dame el total','nueva nota'];
+    const hayFinal = palabrasCierre.some(p => (_bufferFinal + interim).toLowerCase().includes(p));
+
+    if (hayFinal && !_vozProcesando) {
+      _transcripcionAcum += _bufferFinal;
+      _bufferFinal = '';
+      _vozActiva = false;
+      _vozProcesando = true;
+      try { _vozRec.stop(); } catch {}
+      document.getElementById('vozIcono').textContent = '🤖';
+      document.getElementById('vozMensaje').textContent = 'Procesando con IA...';
+      document.getElementById('btnIniciarVoz').innerHTML = '🎤 Iniciar escucha';
+      document.getElementById('btnIniciarVoz').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
+      interpretarVoz(_transcripcionAcum.trim(), true);
+    }
   };
 
   _vozRec.onerror = (e) => {
-    document.getElementById('vozMensaje').textContent = 'Error: ' + e.error + '. Intenta de nuevo.';
+    if (e.error === 'no-speech') {
+      // Reconectar automáticamente si sigue activo
+      if (_vozActiva) setTimeout(() => _iniciarReconocimiento(), 300);
+      return;
+    }
+    document.getElementById('vozMensaje').textContent = 'Error: ' + e.error;
     document.getElementById('vozIcono').textContent = '❌';
-    resetBtnVoz();
+    _vozActiva = false;
+    document.getElementById('btnIniciarVoz').innerHTML = '🎤 Iniciar escucha';
+    document.getElementById('btnIniciarVoz').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
   };
 
-  _vozRec.onend = () => { resetBtnVoz(); };
+  _vozRec.onend = () => {
+    // Si sigue activo (no fue cierre manual ni cierre por palabra), reconectar
+    if (_vozActiva && !_vozProcesando) {
+      _transcripcionAcum += _vozRec._bufferFinal || '';
+      setTimeout(() => _iniciarReconocimiento(), 200);
+    }
+  };
+
   _vozRec.start();
 }
 
 function resetBtnVoz() {
   const btn = document.getElementById('btnIniciarVoz');
-  btn.innerHTML = '🎤 Hablar';
+  btn.innerHTML = '🎤 Iniciar escucha';
   btn.style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
 }
 
@@ -2873,7 +2938,14 @@ Reglas:
     document.getElementById('vozMensaje').textContent = `${_vozItems.length} producto(s) detectado(s)`;
 
     // Respuesta por voz
-    hablarRespuesta(`Detecté ${_vozItems.length} producto${_vozItems.length>1?'s':''}. ${_vozCerrar ? 'Listo para cerrar la nota.' : 'Revisa y confirma.'}`);
+    const totalNota = _vozItems.reduce((s,i) => s + (i.precio * (parseFloat(i.cantidad)||1)), 0);
+    const msgVoz = _vozCerrar
+      ? `Nota lista. ${_vozItems.length} producto${_vozItems.length>1?'s':''}. Total ${totalNota.toFixed(0)} pesos.`
+      : `Detecté ${_vozItems.length} producto${_vozItems.length>1?'s':''}. Revisa y confirma.`;
+    hablarRespuesta(msgVoz);
+    _vozProcesando = false;
+    // Si es cierre, agregar y cerrar automáticamente
+    if (_vozCerrar) { setTimeout(() => agregarVozAlCarrito(), 1800); }
 
   } catch(e) {
     document.getElementById('vozIcono').textContent = '❌';

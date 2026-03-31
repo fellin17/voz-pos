@@ -481,7 +481,7 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
       <b>Ejemplos:</b><br>
       "10 bolillos, 5 teleras, 3 conchas"<br>
       "1 kg de pollo, 20 pesos de cilantro"<br>
-      "clienta María" · "total" para cerrar
+      "clienta María" · di <b>"total"</b> para cerrar automáticamente 🎯
     </div>
 
     <!-- Estado -->
@@ -1790,67 +1790,122 @@ function borrarTodoMovil() {
 }
 
 
-// ─── VOZ IA MÓVIL ─────────────────────────────────────────────────────────────
+// ─── VOZ IA MÓVIL CONTINUA ────────────────────────────────────────────────────
 let _vozItemsMob = [];
 let _vozCerrarMob = false;
 let _vozRecMob = null;
+let _vozActivaMob = false;
+let _vozProcMob = false;
+let _transAcumMob = '';
 
 function abrirVozMob() {
   _vozItemsMob = [];
   _vozCerrarMob = false;
+  _vozActivaMob = false;
+  _vozProcMob = false;
+  _transAcumMob = '';
   const m = document.getElementById('vozModal');
   m.style.display = 'flex';
   resetVozMob();
 }
 
 function cerrarVozMob() {
+  _vozActivaMob = false;
   if (_vozRecMob) { try { _vozRecMob.stop(); } catch {} _vozRecMob = null; }
   document.getElementById('vozModal').style.display = 'none';
 }
 
 function resetVozMob() {
   _vozItemsMob = [];
-  _vozCerrarMob = false;
+  _transAcumMob = '';
   document.getElementById('vozResultadoMob').style.display = 'none';
   document.getElementById('btnAgregarMob').style.display = 'none';
   document.getElementById('btnHablarMob').style.display = 'flex';
+  document.getElementById('btnHablarMob').innerHTML = '🎤 Iniciar escucha';
+  document.getElementById('btnHablarMob').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
   document.getElementById('vozIconoMob').textContent = '🎤';
-  document.getElementById('vozMensajeMob').textContent = 'Presiona el botón para hablar';
+  document.getElementById('vozMensajeMob').textContent = 'Presiona para activar el micrófono';
   document.getElementById('vozTransMob').textContent = '';
 }
 
 function iniciarVozMob() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) { toast('Usa Chrome para reconocimiento de voz', 'error'); return; }
+  if (!SR) { toast('Usa Chrome para voz continua', 'error'); return; }
 
-  document.getElementById('btnHablarMob').innerHTML = '⏹️ Grabando...';
+  if (_vozActivaMob) {
+    _vozActivaMob = false;
+    if (_vozRecMob) { try { _vozRecMob.stop(); } catch {} }
+    document.getElementById('btnHablarMob').innerHTML = '🎤 Iniciar escucha';
+    document.getElementById('btnHablarMob').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
+    document.getElementById('vozIconoMob').textContent = '🎤';
+    document.getElementById('vozMensajeMob').textContent = 'Micrófono apagado';
+    return;
+  }
+
+  _vozActivaMob = true;
+  _transAcumMob = '';
+  _vozProcMob = false;
+  document.getElementById('btnHablarMob').innerHTML = '⏹️ Detener';
   document.getElementById('btnHablarMob').style.background = '#dc2626';
   document.getElementById('vozIconoMob').textContent = '🔴';
-  document.getElementById('vozMensajeMob').textContent = 'Escuchando... habla ahora';
+  document.getElementById('vozMensajeMob').textContent = 'Escuchando... di los productos';
+  document.getElementById('vozResultadoMob').style.display = 'none';
+  document.getElementById('btnAgregarMob').style.display = 'none';
+  _iniciarRecMob();
+}
 
+function _iniciarRecMob() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   _vozRecMob = new SR();
   _vozRecMob.lang = 'es-MX';
-  _vozRecMob.continuous = false;
+  _vozRecMob.continuous = true;
   _vozRecMob.interimResults = true;
 
+  let _bufMob = '';
+
   _vozRecMob.onresult = (e) => {
-    const t = Array.from(e.results).map(r => r[0].transcript).join('');
-    document.getElementById('vozTransMob').textContent = '"' + t + '"';
-    if (e.results[0].isFinal) interpretarVozMob(t);
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) _bufMob += e.results[i][0].transcript + ' ';
+      else interim = e.results[i][0].transcript;
+    }
+    const total = (_transAcumMob + _bufMob + interim).trim();
+    document.getElementById('vozTransMob').textContent = '"' + total + '"';
+
+    const cierres = ['total','resultado','cierra nota','cerrar nota','cobrar','cobrame','terminar','dame el total','nueva nota'];
+    const hayFin = cierres.some(p => (_bufMob + interim).toLowerCase().includes(p));
+
+    if (hayFin && !_vozProcMob) {
+      _transAcumMob += _bufMob; _bufMob = '';
+      _vozActivaMob = false; _vozProcMob = true;
+      try { _vozRecMob.stop(); } catch {}
+      document.getElementById('vozIconoMob').textContent = '🤖';
+      document.getElementById('vozMensajeMob').textContent = 'Procesando con IA...';
+      document.getElementById('btnHablarMob').innerHTML = '🎤 Iniciar escucha';
+      document.getElementById('btnHablarMob').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
+      interpretarVozMob(_transAcumMob.trim(), true);
+    }
   };
-  _vozRecMob.onerror = () => {
+
+  _vozRecMob.onerror = (e) => {
+    if (e.error === 'no-speech' && _vozActivaMob) { setTimeout(() => _iniciarRecMob(), 300); return; }
     document.getElementById('vozMensajeMob').textContent = 'Error. Intenta de nuevo.';
     document.getElementById('vozIconoMob').textContent = '❌';
-    resetBtnHablar();
+    _vozActivaMob = false;
+    document.getElementById('btnHablarMob').innerHTML = '🎤 Iniciar escucha';
+    document.getElementById('btnHablarMob').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
   };
-  _vozRecMob.onend = () => resetBtnHablar();
+
+  _vozRecMob.onend = () => {
+    if (_vozActivaMob && !_vozProcMob) setTimeout(() => _iniciarRecMob(), 200);
+  };
+
   _vozRecMob.start();
 }
 
 function resetBtnHablar() {
-  const b = document.getElementById('btnHablarMob');
-  b.innerHTML = '🎤 Hablar';
-  b.style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
+  document.getElementById('btnHablarMob').innerHTML = '🎤 Iniciar escucha';
+  document.getElementById('btnHablarMob').style.background = 'linear-gradient(135deg,#be185d,#9d174d)';
 }
 
 async function interpretarVozMob(texto) {
@@ -1922,10 +1977,16 @@ Reglas:
     document.getElementById('vozIconoMob').textContent = '✅';
     document.getElementById('vozMensajeMob').textContent = _vozItemsMob.length + ' producto(s) detectado(s)';
 
-    // Voz de respuesta
-    const u = new SpeechSynthesisUtterance(`Detecté ${_vozItemsMob.length} producto${_vozItemsMob.length>1?'s':''}. ${_vozCerrarMob?'Cerrando nota.':'Revisa y confirma.'}`);
+    // Voz de respuesta con total
+    const totalMob = _vozItemsMob.reduce((s,i) => s + (i.precio * (parseFloat(i.cantidad)||1)), 0);
+    const msgMob = _vozCerrarMob
+      ? `Nota lista. ${_vozItemsMob.length} producto${_vozItemsMob.length>1?'s':''}. Total ${totalMob.toFixed(0)} pesos.`
+      : `Detecté ${_vozItemsMob.length} producto${_vozItemsMob.length>1?'s':''}. Revisa y confirma.`;
+    const u = new SpeechSynthesisUtterance(msgMob);
     u.lang = 'es-MX'; u.rate = 1.1;
     window.speechSynthesis?.speak(u);
+    _vozProcMob = false;
+    if (_vozCerrarMob) setTimeout(() => agregarVozMob(), 1800);
 
   } catch(e) {
     document.getElementById('vozIconoMob').textContent = '❌';
