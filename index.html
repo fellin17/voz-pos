@@ -1261,17 +1261,20 @@ function updateCartUI() {
 
 // ─── COMPLETE SALE ─────────────────────────────────────────────────────────────
 function completeSale() {
-  const customer = document.getElementById('posCustomer').value.trim();
-  if (!customer) { toast('Escribe el nombre de la clienta', 'error'); return; }
   if (!cart.length) { toast('El carrito está vacío', 'error'); return; }
-
+  // Nombre es opcional — si no hay, usar "Cliente"
+  if (!document.getElementById('posCustomer').value.trim()) {
+    document.getElementById('posCustomer').value = 'Cliente';
+  }
   const sale = saveSaleFromCart();
   if (!sale) return;
-
   generateTicketPDF(sale);
+  const totalVoz = sale.total.toFixed(0);
+  hablarRespuesta('Nota guardada. Total ' + totalVoz + ' pesos.');
   toast('¡Venta completada! PDF descargado 🎉');
   clearCartUI();
   renderInventory();
+  renderHistory();
 }
 
 // ─── LABEL ────────────────────────────────────────────────────────────────────
@@ -1528,8 +1531,8 @@ function generateTicketPDF(sale) {
 // ─── COMPARTIR POR WHATSAPP ────────────────────────────────────────────────────
 // ─── GUARDAR NOTA EN HISTORIAL (sin imprimir PDF) ─────────────────────────────
 function saveSaleFromCart() {
-  const customer = document.getElementById('posCustomer').value.trim();
-  if (!customer || !cart.length) return null;
+  const customer = document.getElementById('posCustomer').value.trim() || 'Cliente';
+  if (!cart.length) return null;
 
   // Verificar si ya se guardó esta nota (para no duplicar)
   if (window._currentSaleId) {
@@ -1591,8 +1594,8 @@ function waNumeroNuevoEnviar() {
   const lineas = sale.items.map(i => `• ${i.name} x${i.qty} — $${(i.sellPrice*i.qty).toFixed(2)}`).join('\n');
   const msg = `🏪 *${cfg.bizName || 'MI NEGOCIO'}*\n📅 ${new Date(sale.date).toLocaleDateString('es-MX')}\n👤 *${sale.customer}*\n\n${lineas}\n\n━━━━━━━━━━━━━\n💰 *TOTAL: $${sale.total.toFixed(2)}*\n━━━━━━━━━━━━━\n${cfg.msg || '¡Gracias por su compra!'}`;
 
-  // Abrir directo la app de WhatsApp
-  window.location.href = `whatsapp://send?phone=52${num}&text=${encodeURIComponent(msg)}`;
+  // Abrir WhatsApp Web con número en nueva pestaña
+  window.open(`https://web.whatsapp.com/send?phone=52${num}&text=${encodeURIComponent(msg)}`, '_blank');
   document.getElementById('waNumeroNuevo').value = '';
   // Limpiar pantalla para nueva venta
   setTimeout(() => clearCartUI(), 800);
@@ -1633,7 +1636,7 @@ ${cfg.msg || '¡Gracias por su compra!'}`;
 
   toast('✅ Nota guardada en historial');
   clearCartUI();
-  window.location.href = 'whatsapp://send?text=' + encodeURIComponent(msg);
+  window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
 }
 
 function shareWhatsApp(sale) {
@@ -1654,8 +1657,8 @@ ${lineas}
 ━━━━━━━━━━━━━
 ${cfg.msg || '¡Gracias por su compra!'}`;
 
-  // Abre directo la app de WhatsApp en Windows (sin pasar por Chrome)
-  window.location.href = 'whatsapp://send?text=' + encodeURIComponent(msg);
+  // Abrir WhatsApp Web en nueva pestaña (PC)
+  window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
 }
 
 // ─── GENERAR PDF CORTE (descarga) ─────────────────────────────────────────────
@@ -2990,7 +2993,17 @@ function agregarVozAlCarrito() {
 
   if (_vozCerrar) {
     cerrarVoz();
-    setTimeout(() => completeSale(), 300);
+    setTimeout(() => {
+      const sale = saveSaleFromCart();
+      if (sale) {
+        const totalStr = sale.total.toFixed(0);
+        hablarRespuesta('Nota guardada. Total ' + totalStr + ' pesos.');
+        toast('✅ Nota guardada — Total $' + sale.total.toFixed(2));
+        clearCartUI();
+        renderInventory();
+        renderHistory();
+      }
+    }, 300);
   } else {
     nuevaDictacion();
   }

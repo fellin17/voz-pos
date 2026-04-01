@@ -513,6 +513,45 @@ body { font-family: 'Segoe UI', sans-serif; background: var(--bg); color: var(--
   </div>
 </div>
 
+<!-- ═══ MODAL: ENVIAR POR WHATSAPP ═══ -->
+<div id="waModalMob" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:400;align-items:flex-end;justify-content:center">
+  <div style="background:white;border-radius:20px 20px 0 0;width:100%;padding:24px">
+    <div style="font-weight:800;font-size:17px;color:#16a34a;margin-bottom:6px">📲 Enviar nota por WhatsApp</div>
+    <div style="font-size:13px;color:#6b7280;margin-bottom:16px">Escribe el número del cliente (10 dígitos)</div>
+
+    <!-- Teclado numérico visual -->
+    <input type="tel" id="waNumMobModal" inputmode="numeric" maxlength="10"
+      placeholder="5512345678"
+      style="width:100%;padding:14px;font-size:22px;font-weight:700;text-align:center;border:2px solid #86efac;border-radius:12px;outline:none;margin-bottom:16px;letter-spacing:2px">
+
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+      <button onclick="waNumTecla('1')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">1</button>
+      <button onclick="waNumTecla('2')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">2</button>
+      <button onclick="waNumTecla('3')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">3</button>
+      <button onclick="waNumTecla('4')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">4</button>
+      <button onclick="waNumTecla('5')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">5</button>
+      <button onclick="waNumTecla('6')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">6</button>
+      <button onclick="waNumTecla('7')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">7</button>
+      <button onclick="waNumTecla('8')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">8</button>
+      <button onclick="waNumTecla('9')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">9</button>
+      <button onclick="waNumBorrar()" style="padding:16px;font-size:20px;border:1.5px solid #e5e7eb;border-radius:10px;background:#fef2f2;cursor:pointer;touch-action:manipulation">⌫</button>
+      <button onclick="waNumTecla('0')" style="padding:16px;font-size:20px;font-weight:700;border:1.5px solid #e5e7eb;border-radius:10px;background:white;cursor:pointer;touch-action:manipulation">0</button>
+      <button onclick="waNumEnviarMob()" style="padding:16px;font-size:20px;border:1.5px solid #86efac;border-radius:10px;background:#dcfce7;cursor:pointer;touch-action:manipulation">✓</button>
+    </div>
+
+    <div style="display:flex;gap:10px">
+      <button onclick="waNumEnviarMob()"
+        style="flex:1;padding:16px;background:linear-gradient(135deg,#16a34a,#15803d);color:white;border:none;border-radius:12px;font-weight:800;font-size:16px;cursor:pointer;touch-action:manipulation">
+        📲 Enviar por WhatsApp
+      </button>
+      <button onclick="cerrarWAModal()"
+        style="padding:16px 20px;background:#f1f5f9;border:none;border-radius:12px;font-weight:700;font-size:14px;cursor:pointer;touch-action:manipulation;color:#6b7280">
+        Omitir
+      </button>
+    </div>
+  </div>
+</div>
+
 <div class="summary-bar" id="summaryBar" style="display:none">
   <div>
     <div class="total-label">Total</div>
@@ -1046,28 +1085,29 @@ function waNumNuevoMobEnviar() {
   document.getElementById('waNumNuevoMob').value = '';
   toast('✅ Venta guardada — abriendo WhatsApp');
   setTimeout(() => {
-    window.location.href = `whatsapp://send?phone=52${num}&text=${encodeURIComponent(msg)}`;
+    window.open(`https://wa.me/52${num}?text=${encodeURIComponent(msg)}`, '_blank');
   }, 500);
 }
 
 async function completarVenta() {
-  const customer = document.getElementById('ventaCliente').value.trim();
-  if (!customer) { toast('Escribe el nombre de la clienta', 'error'); return; }
   if (!cart.length) { toast('El carrito está vacío', 'error'); return; }
-
+  // Nombre opcional
+  if (!document.getElementById('ventaCliente').value.trim()) {
+    document.getElementById('ventaCliente').value = 'Cliente';
+  }
+  const customer = document.getElementById('ventaCliente').value.trim();
   const total  = cart.reduce((s, i) => s + i.sellPrice * i.qty, 0);
-  const profit = cart.reduce((s, i) => s + (i.sellPrice - i.buyPrice) * i.qty, 0);
+  const profit = cart.reduce((s, i) => s + (i.sellPrice - (i.buyPrice||0)) * i.qty, 0);
+  const saleId = Date.now().toString();
 
   const sale = {
-    id: Date.now().toString(),
+    id: saleId,
     date: new Date().toISOString(),
     customer,
     items: cart.map(i => ({ ...i })),
     total, profit, inCut: false,
-    qrData: `ID:${Date.now().toString()}\nFolio: #${Date.now().toString().slice(-8).toUpperCase()}\nCliente: ${customer}\nTOTAL: $${total.toFixed(2)}`
   };
 
-  // Descontar stock
   products = products.map(p => {
     const ci = cart.find(i => i.id === p.id);
     return ci ? { ...p, stock: p.stock - ci.qty } : p;
@@ -1076,21 +1116,21 @@ async function completarVenta() {
   sales.push(sale);
   await saveData();
 
-  // WhatsApp
-  const lineas = sale.items.map(i => `• ${i.name} ×${i.qty} — $${(i.sellPrice * i.qty).toFixed(2)}`).join('\n');
-  const msg = `🏪 *${cfg.bizName || 'MI NEGOCIO'}*\n📅 ${new Date(sale.date).toLocaleDateString('es-MX')}\n👤 *Cliente: ${sale.customer}*\n\n${lineas}\n\n━━━━━━━━━━━━━\n💰 *TOTAL: $${sale.total.toFixed(2)}*\n━━━━━━━━━━━━━\n${cfg.msg || '¡Gracias por su compra!'}`;
-
   cart = [];
   document.getElementById('ventaCliente').value = '';
   updateCartUI();
   renderInventario();
+  renderNotas();
 
-  toast('✅ Venta guardada');
-  setTimeout(() => {
-    if (confirm('¿Enviar por WhatsApp?')) {
-      window.location.href = 'whatsapp://send?text=' + encodeURIComponent(msg);
-    }
-  }, 500);
+  // Hablar el total
+  const u = new SpeechSynthesisUtterance('Nota guardada. Total ' + total.toFixed(0) + ' pesos.');
+  u.lang = 'es-MX'; u.rate = 1.1;
+  window.speechSynthesis?.speak(u);
+
+  toast('✅ Nota guardada — $' + total.toFixed(2));
+
+  // Modal para enviar WhatsApp con número
+  abrirWAModal(sale);
 }
 
 // ─── NOTAS ────────────────────────────────────────────────────────────────────
@@ -1151,7 +1191,7 @@ function waShare(saleId) {
   if (!s) return;
   const lineas = s.items.map(i => `• ${i.name} ×${i.qty} — $${(i.sellPrice * i.qty).toFixed(2)}`).join('\n');
   const msg = `🏪 *${cfg.bizName}*\n📅 ${new Date(s.date).toLocaleDateString('es-MX')}\n👤 *${s.customer}*\n\n${lineas}\n\n━━━━━━━━━━━━━\n💰 *TOTAL: $${s.total.toFixed(2)}*\n━━━━━━━━━━━━━\n${cfg.msg || '¡Gracias por su compra!'}`;
-  window.location.href = 'whatsapp://send?text=' + encodeURIComponent(msg);
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
 }
 
 // ─── PDF MÓVIL ────────────────────────────────────────────────────────────────
@@ -2026,6 +2066,41 @@ function agregarVozMob() {
   } else {
     resetVozMob();
   }
+}
+
+// ─── WHATSAPP MODAL MÓVIL ─────────────────────────────────────────────────────
+let _waSaleMob = null;
+
+function abrirWAModal(sale) {
+  _waSaleMob = sale;
+  document.getElementById('waNumMobModal').value = '';
+  document.getElementById('waModalMob').style.display = 'flex';
+}
+
+function cerrarWAModal() {
+  document.getElementById('waModalMob').style.display = 'none';
+  _waSaleMob = null;
+}
+
+function waNumTecla(d) {
+  const el = document.getElementById('waNumMobModal');
+  if (el.value.length < 10) el.value += d;
+}
+
+function waNumBorrar() {
+  const el = document.getElementById('waNumMobModal');
+  el.value = el.value.slice(0, -1);
+}
+
+function waNumEnviarMob() {
+  const num = document.getElementById('waNumMobModal').value.trim().replace(/\D/g,'');
+  if (num.length !== 10) { toast('Escribe los 10 dígitos', 'error'); return; }
+  if (!_waSaleMob) { cerrarWAModal(); return; }
+  const s = _waSaleMob;
+  const lineas = s.items.map(i => `• ${i.name} ×${i.qty} — $${(i.sellPrice*i.qty).toFixed(2)}`).join('\n');
+  const msg = `🏪 *${cfg.bizName||'MI NEGOCIO'}*\n📅 ${new Date(s.date).toLocaleDateString('es-MX')}\n\n${lineas}\n\n━━━━━━━━━━━━━\n💰 *TOTAL: $${s.total.toFixed(2)}*\n━━━━━━━━━━━━━\n${cfg.msg||'¡Gracias por su compra!'}`;
+  cerrarWAModal();
+  window.open(`https://wa.me/52${num}?text=${encodeURIComponent(msg)}`, '_blank');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
