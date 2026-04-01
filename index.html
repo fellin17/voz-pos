@@ -293,8 +293,8 @@ return QRCode;
         <!-- Lado izquierdo: buscar productos -->
         <div>
           <div class="input-group" style="margin-bottom:12px">
-            <label>👤 Nombre de la clienta</label>
-            <input class="input" id="posCustomer" placeholder="Ej: María García"
+            <label>👤 Nombre (opcional)</label>
+            <input class="input" id="posCustomer" placeholder="Opcional — Ej: María García"
               oninput="updateCartUI()"
               onkeydown="if(event.key==='Enter'){event.preventDefault();document.getElementById('posSearch').focus();}">
           </div>
@@ -802,7 +802,7 @@ return QRCode;
     <div class="modal-body">
       <!-- Nombre -->
       <div class="input-group">
-        <label>👤 Nombre de la clienta</label>
+        <label>👤 Nombre (opcional)</label>
         <input class="input" id="editNotaCliente" placeholder="Nombre de la clienta">
       </div>
 
@@ -1595,7 +1595,7 @@ function waNumeroNuevoEnviar() {
   const msg = `🏪 *${cfg.bizName || 'MI NEGOCIO'}*\n📅 ${new Date(sale.date).toLocaleDateString('es-MX')}\n👤 *${sale.customer}*\n\n${lineas}\n\n━━━━━━━━━━━━━\n💰 *TOTAL: $${sale.total.toFixed(2)}*\n━━━━━━━━━━━━━\n${cfg.msg || '¡Gracias por su compra!'}`;
 
   // Abrir WhatsApp Web con número en nueva pestaña
-  window.open(`https://web.whatsapp.com/send?phone=52${num}&text=${encodeURIComponent(msg)}`, '_blank');
+  window.location.href = `https://web.whatsapp.com/send?phone=52${num}&text=${encodeURIComponent(msg)}`;
   document.getElementById('waNumeroNuevo').value = '';
   // Limpiar pantalla para nueva venta
   setTimeout(() => clearCartUI(), 800);
@@ -1636,7 +1636,7 @@ ${cfg.msg || '¡Gracias por su compra!'}`;
 
   toast('✅ Nota guardada en historial');
   clearCartUI();
-  window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
+  window.location.href = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(msg);
 }
 
 function shareWhatsApp(sale) {
@@ -1658,7 +1658,7 @@ ${lineas}
 ${cfg.msg || '¡Gracias por su compra!'}`;
 
   // Abrir WhatsApp Web en nueva pestaña (PC)
-  window.open('https://web.whatsapp.com/send?text=' + encodeURIComponent(msg), '_blank');
+  window.location.href = 'https://web.whatsapp.com/send?text=' + encodeURIComponent(msg);
 }
 
 // ─── GENERAR PDF CORTE (descarga) ─────────────────────────────────────────────
@@ -2862,7 +2862,7 @@ async function interpretarVoz(texto) {
   document.getElementById('vozMensaje').textContent = 'Interpretando con IA...';
 
   // Palabras clave para cerrar nota
-  const palabrasCierre = ['total','resultado','cerrar nota','cierra nota','cobrar','terminar','finalizar','nueva nota','cobrame','dame el total'];
+  const palabrasCierre = ['total','resultado','cerrar nota','cierra nota','cobrar','terminar','finalizar','nueva nota','cobrame','dame el total','cobrame todo'];
   const textLower = texto.toLowerCase();
   const esCierre = palabrasCierre.some(p => textLower.includes(p));
 
@@ -2992,35 +2992,90 @@ function agregarVozAlCarrito() {
   toast(`🎤 ${agregados} producto(s) agregados por voz`);
 
   if (_vozCerrar) {
-    // 1. Cerrar modal de voz
     cerrarVoz();
     setTimeout(() => {
-      // 2. Poner nombre genérico si no hay
+      // Nombre genérico si no hay
       if (!document.getElementById('posCustomer').value.trim()) {
         document.getElementById('posCustomer').value = 'Cliente';
       }
-      // 3. Guardar nota en historial
+      // Guardar nota
       const sale = saveSaleFromCart();
-      if (sale) {
-        const totalStr = sale.total.toFixed(0);
-        renderInventory();
-        renderHistory();
-        // 4. Limpiar carrito inmediatamente
-        clearCartUI();
-        // 5. Decir el total en voz alta
-        hablarRespuesta('Nota guardada. Total ' + totalStr + ' pesos. Lista para la siguiente.');
-        toast('✅ Nota guardada — $' + sale.total.toFixed(2));
-        // 6. Abrir voz automáticamente para la siguiente nota (después de que termine de hablar)
-        setTimeout(() => {
-          abrirVoz();
-          // Iniciar micrófono automáticamente
-          setTimeout(() => iniciarVoz(), 400);
-        }, 2800);
-      }
+      if (!sale) return;
+      const totalStr = sale.total.toFixed(2);
+      const totalVoz = sale.total.toFixed(0);
+      renderInventory();
+      renderHistory();
+
+      // Mostrar resumen en pantalla SIN limpiar — el usuario verá el total
+      mostrarResumenVoz(sale);
+
+      // Hablar el total
+      hablarRespuesta('Total: ' + totalVoz + ' pesos. Di inicio o presiona limpiar para una nueva nota.');
+      toast('✅ Nota guardada — $' + totalStr);
     }, 300);
   } else {
     nuevaDictacion();
   }
+}
+
+// Muestra resumen de la nota cerrada con botón de limpiar y nueva nota por voz
+function mostrarResumenVoz(sale) {
+  const lineas = sale.items.map(i =>
+    `<div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid #f9a8d4;font-size:13px">
+      <span>${i.name} ×${i.qty}</span>
+      <span style="font-weight:700">$${(i.sellPrice*i.qty).toFixed(2)}</span>
+    </div>`
+  ).join('');
+
+  document.getElementById('cartSummary').innerHTML = `
+    <div style="background:#f0fdf4;border:2px solid #16a34a;border-radius:10px;padding:14px;margin-bottom:8px">
+      <div style="font-weight:800;font-size:13px;color:#16a34a;margin-bottom:8px">✅ NOTA GUARDADA</div>
+      ${lineas}
+      <div style="display:flex;justify-content:space-between;margin-top:10px;padding-top:8px;border-top:2px solid #16a34a">
+        <span style="font-weight:800;font-size:15px">TOTAL</span>
+        <span style="font-weight:900;font-size:18px;color:#16a34a">$${sale.total.toFixed(2)}</span>
+      </div>
+    </div>
+    <div style="font-size:11px;color:#9d174d;text-align:center;margin-bottom:8px">
+      Di <b>"inicio"</b> o presiona el botón para nueva nota
+    </div>
+    <button onclick="nuevaNotaVoz()"
+      style="width:100%;padding:12px;background:linear-gradient(135deg,#be185d,#9d174d);color:white;border:none;border-radius:10px;font-weight:800;font-size:14px;cursor:pointer;transition:all .2s">
+      🎤 Nueva nota
+    </button>
+  `;
+  // Escuchar "inicio" por voz para nueva nota
+  _escucharInicio();
+}
+
+let _vozInicio = null;
+function _escucharInicio() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) return;
+  if (_vozInicio) { try { _vozInicio.stop(); } catch {} }
+  _vozInicio = new SR();
+  _vozInicio.lang = 'es-MX';
+  _vozInicio.continuous = false;
+  _vozInicio.interimResults = false;
+  _vozInicio.onresult = (e) => {
+    const t = e.results[0][0].transcript.toLowerCase();
+    const palabras = ['inicio','nueva nota','siguiente','nueva','limpiar','empezar'];
+    if (palabras.some(p => t.includes(p))) nuevaNotaVoz();
+    else _escucharInicio(); // volver a escuchar si no fue la palabra
+  };
+  _vozInicio.onerror = () => {};
+  _vozInicio.onend = () => {};
+  try { _vozInicio.start(); } catch {}
+}
+
+function nuevaNotaVoz() {
+  if (_vozInicio) { try { _vozInicio.stop(); } catch {} _vozInicio = null; }
+  cart = [];
+  window._currentSaleId = null;
+  document.getElementById('posCustomer').value = '';
+  updateCartUI();
+  // Abrir voz directo para siguiente nota
+  setTimeout(() => { abrirVoz(); setTimeout(() => iniciarVoz(), 400); }, 300);
 }
 
 function hablarRespuesta(texto) {
