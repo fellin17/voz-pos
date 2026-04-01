@@ -2992,16 +2992,30 @@ function agregarVozAlCarrito() {
   toast(`🎤 ${agregados} producto(s) agregados por voz`);
 
   if (_vozCerrar) {
+    // 1. Cerrar modal de voz
     cerrarVoz();
     setTimeout(() => {
+      // 2. Poner nombre genérico si no hay
+      if (!document.getElementById('posCustomer').value.trim()) {
+        document.getElementById('posCustomer').value = 'Cliente';
+      }
+      // 3. Guardar nota en historial
       const sale = saveSaleFromCart();
       if (sale) {
         const totalStr = sale.total.toFixed(0);
-        hablarRespuesta('Nota guardada. Total ' + totalStr + ' pesos.');
-        toast('✅ Nota guardada — Total $' + sale.total.toFixed(2));
-        clearCartUI();
         renderInventory();
         renderHistory();
+        // 4. Limpiar carrito inmediatamente
+        clearCartUI();
+        // 5. Decir el total en voz alta
+        hablarRespuesta('Nota guardada. Total ' + totalStr + ' pesos. Lista para la siguiente.');
+        toast('✅ Nota guardada — $' + sale.total.toFixed(2));
+        // 6. Abrir voz automáticamente para la siguiente nota (después de que termine de hablar)
+        setTimeout(() => {
+          abrirVoz();
+          // Iniciar micrófono automáticamente
+          setTimeout(() => iniciarVoz(), 400);
+        }, 2800);
       }
     }, 300);
   } else {
